@@ -1,0 +1,66 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-mono: "SF Mono", "Roboto Mono", monospace;
+  
+  --color-bg-main: #242220;
+  --color-panel: #2f2d2b;
+  --color-accent: #ffd700;
+  --color-blue-main: #3a86ff;
+  --color-gold: #ffd700;
+  --color-red-main: #ff4444;
+  --color-profit: #39ff14;
+  --color-loss: #ff4444;
+  --color-text-white: #f0f0f0;
+}
+
+html {
+  font-size: 1px;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: var(--color-bg-main);
+  color: var(--color-text-white);
+  font-size: 16rem;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  letter-spacing: -0.01em;
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+}
+
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+  -ms-overflow-style: none; /* IE and Edge */
+  scrollbar-width: none; /* Firefox */
+}
+
+*::-webkit-scrollbar {
+  display: none; /* Chrome, Safari and Opera */
+}
+
+@keyframes winPulse { 
+  0% { box-shadow: 0 4px 0 #b37700, 0 5px 10px rgba(0,0,0,0.5), inset 0 1px 1px rgba(255,255,255,0.5), 0 0 5px var(--color-gold); } 
+  50% { box-shadow: 0 4px 0 #b37700, 0 5px 10px rgba(0,0,0,0.5), inset 0 1px 1px rgba(255,255,255,0.5), 0 0 25px var(--color-gold); } 
+  100% { box-shadow: 0 4px 0 #b37700, 0 5px 10px rgba(0,0,0,0.5), inset 0 1px 1px rgba(255,255,255,0.5), 0 0 5px var(--color-gold); } 
+}
+
+@keyframes pulseText { 
+  0% { opacity: 0.6; } 
+  50% { opacity: 1; } 
+  100% { opacity: 0.6; } 
+}
+
+@keyframes shake { 
+  0% { transform: translateX(0) } 
+  25% { transform: translateX(-5px) } 
+  50% { transform: translateX(5px) } 
+  75% { transform: translateX(-5px) } 
+  100% { transform: translateX(0) } 
+}
