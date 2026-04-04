@@ -96,13 +96,6 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
             }
             
             const status = await BackendService.getUserStatus();
-            
-            // Generate initial random selection
-            const initialSelected: number[] = [];
-            while(initialSelected.length < 4) {
-                let r = Math.floor(Math.random() * CONFIG.totalNumbers) + 1;
-                if(!initialSelected.includes(r)) initialSelected.push(r);
-            }
 
             let initialBet = 5.00;
             if(!CONFIG.betSteps.includes(initialBet)) initialBet = CONFIG.betSteps[0];
@@ -110,9 +103,9 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
             updateState({
                 isLoggedIn: status.isLoggedIn,
                 balance: status.isLoggedIn ? status.balance : 0,
-                selected: initialSelected,
-                pickMode: 'random',
-                sliderValue: 4,
+                selected: [],
+                pickMode: 'manual',
+                sliderValue: 0,
                 bet: initialBet
             });
         };

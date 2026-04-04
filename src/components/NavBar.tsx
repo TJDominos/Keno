@@ -17,7 +17,7 @@ export function NavBar() {
 
     return (
         <div className="w-full h-[60px] bg-[#3a3836] flex justify-center px-[20px] sticky top-0 z-[500] shrink-0">
-            <div className="w-full max-w-[1280px] flex justify-between items-center h-full">
+            <div className="w-full max-w-[1024px] flex justify-between items-center h-full">
                 <div className="flex items-center flex-1">
                     <button className="bg-transparent border-none text-[#f0f0f0] cursor-pointer p-[8px] flex items-center justify-center hover:opacity-80 transition-opacity" onClick={handleExit}>
                         <LogOut size={24} className="scale-x-[-1]" />

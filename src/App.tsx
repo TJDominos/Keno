@@ -28,7 +28,7 @@ function GameLayout() {
         <div className="flex flex-col items-center min-h-screen w-full">
             <NavBar />
             <GameHeader />
-            <div className="flex flex-col w-full max-w-[1280px] px-[10px]">
+            <div className="flex flex-col w-full max-w-[1024px] px-[10px]">
                 <KenoGrid />
                 <Paytable />
                 <Controls />

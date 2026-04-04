@@ -51,7 +51,7 @@ export function GameHeader() {
     const visibleHistory = state.history.slice(0, historyPage * historyPageSize);
 
     return (
-        <div className="w-full max-w-[1280px] relative my-[15px] mb-[10px] px-[10px] z-[400] flex justify-center shrink-0">
+        <div className="w-full max-w-[1024px] relative my-[15px] mb-[10px] px-[10px] z-[400] flex justify-center shrink-0">
             <div 
                 ref={triggerRef}
                 className="flex items-center justify-between gap-[12px] bg-[#15171a] p-[12px_20px] rounded-[16px] border border-[#2d3035] cursor-pointer w-full max-w-full transition-colors duration-200 shadow-[0_4px_12px_rgba(0,0,0,0.2)] active:bg-[#25282c] active:border-[#444]"
