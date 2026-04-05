@@ -37,7 +37,7 @@ export function Controls() {
     };
 
     return (
-        <div className="flex flex-col gap-[8px] mt-[10px] pb-[60px]">
+        <div className="flex flex-col gap-[8px] mt-[10px] pb-[20px]">
             <div className={cn(
                 "flex items-center justify-between bg-[#2f2d2b] p-[5px_15px] rounded-[10px] border h-[50px] transition-all duration-200",
                 state.isStatusWarn ? "border-[#ffaa00] shadow-[0_0_10px_rgba(255,170,0,0.3)]" : "border-[#3e3c3a]"

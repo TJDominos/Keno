@@ -39,7 +39,7 @@ export function Paytable() {
     };
 
     return (
-        <div className="bg-[#2f2d2b] p-[12px_8px] rounded-[12px] border border-[#3e3c3a] mb-[8px] flex flex-col justify-center min-h-[60px]">
+        <div className="bg-[#2f2d2b] p-[8px_8px] rounded-[12px] border border-[#3e3c3a] mb-[8px] flex flex-col justify-center min-h-[50px]">
             <div className={cn(
                 "text-center text-[20.8px] font-bold mb-[8px] min-h-[1.2em] transition-colors duration-200",
                 state.isStatusLoading ? "text-[#88ccff] animate-[pulseText_1s_infinite]" : "text-white",

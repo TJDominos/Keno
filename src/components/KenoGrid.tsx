@@ -45,7 +45,7 @@ export function KenoGrid() {
 
     return (
         <div className="bg-[#1e1c1a] p-[10px] sm:p-[20px] rounded-[20px] shadow-[inset_0_2px_10px_rgba(0,0,0,0.5),0_4px_15px_rgba(0,0,0,0.3)] border border-[#3e3c3a] mb-[12px] flex justify-center">
-            <div className="grid grid-cols-10 max-[480px]:grid-cols-8 gap-[6px] sm:gap-[12px] w-full max-w-[460px] sm:max-w-[920px]">
+            <div className="grid grid-cols-10 max-[480px]:grid-cols-8 gap-[4px] sm:gap-[8px] w-full max-w-[460px] sm:max-w-[min(100%,_70vh)] lg:max-w-[750px]">
                 {renderBalls()}
             </div>
         </div>

@@ -51,7 +51,7 @@ export function GameHeader() {
     const visibleHistory = state.history.slice(0, historyPage * historyPageSize);
 
     return (
-        <div className="w-full max-w-[1024px] relative my-[15px] mb-[10px] px-[10px] z-[400] flex justify-center shrink-0">
+        <div className="w-full max-w-[1024px] relative my-[8px] mb-[8px] px-[10px] z-[400] flex justify-center shrink-0">
             <div 
                 ref={triggerRef}
                 className="flex items-center justify-between gap-[12px] bg-[#15171a] p-[12px_20px] rounded-[16px] border border-[#2d3035] cursor-pointer w-full max-w-full transition-colors duration-200 shadow-[0_4px_12px_rgba(0,0,0,0.2)] active:bg-[#25282c] active:border-[#444]"
@@ -61,7 +61,7 @@ export function GameHeader() {
                     <Wallet size={24} />
                 </div>
                 <span className="text-[24px] font-bold text-[#39ff14] tracking-[1px] font-mono drop-shadow-[0_0_10px_rgba(57,255,20,0.2)] flex-1 text-center">
-                    {state.isLoggedIn ? `$${state.balance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "Login"}
+                    {state.isLoggedIn ? `$${state.balance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "Balance"}
                 </span>
                 <span className={`text-[12.8px] text-[#6e7681] transition-transform duration-300 ml-auto ${isOpen ? 'rotate-180' : ''}`}>
                     <ChevronDown size={16} />
