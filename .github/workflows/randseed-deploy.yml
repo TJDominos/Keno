@@ -27,19 +27,38 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - run: npm ci && npm run build
+      - name: Install dependencies and build
+        shell: bash
+        run: |
+          if [ -f pnpm-lock.yaml ]; then
+            corepack enable
+            pnpm install --frozen-lockfile
+            pnpm run build
+          elif [ -f yarn.lock ]; then
+            corepack enable
+            yarn install --frozen-lockfile
+            yarn build
+          elif [ -f package-lock.json ]; then
+            npm ci
+            npm run build
+          else
+            npm install
+            npm run build
+          fi
       - name: Create manifest
         env:
           DEPLOYMENT_ID: ${{ inputs.deployment_id }}
           COMMIT_SHA: ${{ inputs.commit_sha }}
+          BUILD_DIR: dist
         run: |
           node <<'NODE' > /tmp/randseed-manifest.json
           const fs = require('fs'), path = require('path'), crypto = require('crypto');
-          const root = 'dist';
+          const root = process.env.BUILD_DIR;
+          if (!fs.existsSync(root) || !fs.statSync(root).isDirectory()) { console.error(`Build directory does not exist: ${root}`); process.exit(1); }
           const files = [];
           function walk(dir) { for (const entry of fs.readdirSync(dir, { withFileTypes: true })) { const full = path.join(dir, entry.name); if (entry.isDirectory()) walk(full); else { const relative = path.relative(root, full).split(path.sep).join('/'); const bytes = fs.readFileSync(full); files.push({ path: relative, sha256: crypto.createHash('sha256').update(bytes).digest('hex'), size: bytes.length }); } } }
           walk(root); files.sort((a, b) => a.path.localeCompare(b.path));
-          console.log(JSON.stringify({ deployment_id: process.env.DEPLOYMENT_ID, commit_sha: process.env.COMMIT_SHA, root: 'dist', files, total_bytes: files.reduce((sum, file) => sum + file.size, 0) }));
+          console.log(JSON.stringify({ deployment_id: process.env.DEPLOYMENT_ID, commit_sha: process.env.COMMIT_SHA, root, files, total_bytes: files.reduce((sum, file) => sum + file.size, 0) }));
           NODE
       - name: Request upload session
         env:
@@ -54,9 +73,10 @@ jobs:
         env:
           RANDSEED_API_URL: https://devcreator.randseed.org
           DEPLOYMENT_ID: ${{ inputs.deployment_id }}
+          BUILD_DIR: dist
         run: |
           UPLOAD_TOKEN=$(node -e "console.log(require('/tmp/randseed-session.json').upload_token)"); UPLOAD_BASE_URL=$(node -e "console.log(require('/tmp/randseed-session.json').upload_base_url)"); echo "::add-mask::$UPLOAD_TOKEN"
-          node -e "const m=require('/tmp/randseed-manifest.json');for(const f of m.files)console.log(f.path+'\t'+f.size)" | while IFS=$'\t' read -r FILE_PATH FILE_SIZE; do ENCODED_PATH=$(node -e "console.log(encodeURIComponent(process.argv[1]))" "$FILE_PATH"); curl -fsS -X PUT "$UPLOAD_BASE_URL/$ENCODED_PATH" -H "Authorization: Bearer $UPLOAD_TOKEN" -H "Content-Length: $FILE_SIZE" --data-binary @"dist/$FILE_PATH" > /dev/null; done
+          node -e "const m=require('/tmp/randseed-manifest.json');for(const f of m.files)console.log(f.path+'\t'+f.size)" | while IFS=$'\t' read -r FILE_PATH FILE_SIZE; do ENCODED_PATH=$(node -e "console.log(encodeURIComponent(process.argv[1]))" "$FILE_PATH"); curl -fsS -X PUT "$UPLOAD_BASE_URL/$ENCODED_PATH" -H "Authorization: Bearer $UPLOAD_TOKEN" -H "Content-Length: $FILE_SIZE" --data-binary @"$BUILD_DIR/$FILE_PATH" > /dev/null; done
       - name: Verify and publish
         env:
           RANDSEED_API_URL: https://devcreator.randseed.org
