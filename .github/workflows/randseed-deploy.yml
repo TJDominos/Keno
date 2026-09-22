@@ -1,3 +1,4 @@
+# randseed-workflow-version: 2
 name: Deploy to RandSeed Sandbox
 
 on:
@@ -54,6 +55,7 @@ jobs:
           COMMIT_SHA: ${{ inputs.commit_sha }}
           BUILD_DIR: dist
         run: |
+          set -Eeuo pipefail
           node <<'NODE' > /tmp/randseed-manifest.json
           const fs = require('fs'), path = require('path'), crypto = require('crypto');
           const root = process.env.BUILD_DIR;
@@ -61,7 +63,9 @@ jobs:
           const files = [];
           function walk(dir) { for (const entry of fs.readdirSync(dir, { withFileTypes: true })) { const full = path.join(dir, entry.name); if (entry.isDirectory()) walk(full); else { const relative = path.relative(root, full).split(path.sep).join('/'); const bytes = fs.readFileSync(full); files.push({ path: relative, sha256: crypto.createHash('sha256').update(bytes).digest('hex'), size: bytes.length }); } } }
           walk(root); files.sort((a, b) => a.path.localeCompare(b.path));
-          console.log(JSON.stringify({ deployment_id: process.env.DEPLOYMENT_ID, commit_sha: process.env.COMMIT_SHA, root, files, total_bytes: files.reduce((sum, file) => sum + file.size, 0) }));
+          const totalBytes = files.reduce((sum, file) => sum + file.size, 0);
+          console.error(`RandSeed artifact manifest: ${files.length} files, ${totalBytes} bytes`);
+          console.log(JSON.stringify({ deployment_id: process.env.DEPLOYMENT_ID, commit_sha: process.env.COMMIT_SHA, root, files, total_bytes: totalBytes }));
           NODE
       - name: Request upload session
         env:
@@ -69,6 +73,7 @@ jobs:
           OIDC_AUDIENCE: randseed-gamecreator
           DEPLOYMENT_ID: ${{ inputs.deployment_id }}
         run: |
+          set -Eeuo pipefail
           OIDC_TOKEN=$(node --input-type=module <<'NODE'
           const requestUrl = process.env.ACTIONS_ID_TOKEN_REQUEST_URL;
           const requestToken = process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN;
@@ -105,19 +110,45 @@ jobs:
           process.stdout.write(payload.value);
           NODE
           )
-          echo "::add-mask::$OIDC_TOKEN"; echo "OIDC_TOKEN=$OIDC_TOKEN" >> "$GITHUB_ENV"
-          node -e "const fs=require('fs');const m=JSON.parse(fs.readFileSync('/tmp/randseed-manifest.json'));process.stdout.write(JSON.stringify({manifest:m}))" | curl -fsS -X POST "$RANDSEED_API_URL/api/deployments/$DEPLOYMENT_ID/upload-session" -H "Authorization: Bearer $OIDC_TOKEN" -H 'Content-Type: application/json' --data-binary @- > /tmp/randseed-session.json
+          echo "::add-mask::$OIDC_TOKEN"
+          echo "OIDC_TOKEN=$OIDC_TOKEN" >> "$GITHUB_ENV"
+          node -e "const fs=require('fs');const m=JSON.parse(fs.readFileSync('/tmp/randseed-manifest.json'));fs.writeFileSync('/tmp/randseed-upload-request.json',JSON.stringify({manifest:m}))"
+          HTTP_STATUS=$(curl -sS -o /tmp/randseed-session.json -w '%{http_code}' -X POST "$RANDSEED_API_URL/api/deployments/$DEPLOYMENT_ID/upload-session" -H "Authorization: Bearer $OIDC_TOKEN" -H 'Content-Type: application/json' --data-binary @/tmp/randseed-upload-request.json)
+          if [[ "$HTTP_STATUS" -lt 200 || "$HTTP_STATUS" -ge 300 ]]; then
+            node -e "const fs=require('fs');const body=fs.readFileSync('/tmp/randseed-session.json','utf8');let message=body;try { const parsed=JSON.parse(body); message=parsed.code+': '+(parsed.error||parsed.message||body); } catch {} console.error('RandSeed upload session failed ('+process.argv[1]+'): '+message.replace(/\\s+/g,' ').slice(0,1000));process.exit(1)" "$HTTP_STATUS"
+          fi
+          node <<'NODE'
+          const fs = require('fs');
+          const session = JSON.parse(fs.readFileSync('/tmp/randseed-session.json', 'utf8'));
+          if (typeof session.upload_token !== 'string' || typeof session.upload_base_url !== 'string') {
+            console.error('RandSeed upload session response is missing upload credentials');
+            process.exit(1);
+          }
+          NODE
       - name: Upload static files
         env:
           RANDSEED_API_URL: https://devcreator.randseed.org
           DEPLOYMENT_ID: ${{ inputs.deployment_id }}
           BUILD_DIR: dist
         run: |
-          UPLOAD_TOKEN=$(node -e "console.log(require('/tmp/randseed-session.json').upload_token)"); UPLOAD_BASE_URL=$(node -e "console.log(require('/tmp/randseed-session.json').upload_base_url)"); echo "::add-mask::$UPLOAD_TOKEN"
-          node -e "const m=require('/tmp/randseed-manifest.json');for(const f of m.files)console.log(f.path+'\t'+f.size)" | while IFS=$'\t' read -r FILE_PATH FILE_SIZE; do ENCODED_PATH=$(node -e "console.log(encodeURIComponent(process.argv[1]))" "$FILE_PATH"); curl -fsS -X PUT "$UPLOAD_BASE_URL/$ENCODED_PATH" -H "Authorization: Bearer $UPLOAD_TOKEN" -H "Content-Length: $FILE_SIZE" --data-binary @"$BUILD_DIR/$FILE_PATH" > /dev/null; done
+          set -Eeuo pipefail
+          UPLOAD_TOKEN=$(node -e "console.log(require('/tmp/randseed-session.json').upload_token)")
+          UPLOAD_BASE_URL=$(node -e "const { upload_base_url }=require('/tmp/randseed-session.json');console.log(new URL(upload_base_url,process.env.RANDSEED_API_URL).toString().replace(/\\/$/,''))")
+          echo "::add-mask::$UPLOAD_TOKEN"
+          node -e "const m=require('/tmp/randseed-manifest.json');for(const f of m.files)console.log(f.path+'\t'+f.size)" | while IFS=$'\t' read -r FILE_PATH FILE_SIZE; do
+            ENCODED_PATH=$(node -e "console.log(process.argv[1].split('/').map(encodeURIComponent).join('/'))" "$FILE_PATH")
+            HTTP_STATUS=$(curl -sS -o /tmp/randseed-upload-response -w '%{http_code}' -X PUT "$UPLOAD_BASE_URL/$ENCODED_PATH" -H "Authorization: Bearer $UPLOAD_TOKEN" -H "Content-Length: $FILE_SIZE" --data-binary @"$BUILD_DIR/$FILE_PATH")
+            if [[ "$HTTP_STATUS" -lt 200 || "$HTTP_STATUS" -ge 300 ]]; then
+              node -e "const fs=require('fs');const body=fs.readFileSync('/tmp/randseed-upload-response','utf8');console.error('RandSeed artifact upload failed ('+process.argv[2]+', '+process.argv[1]+'): '+body.replace(/\\s+/g,' ').slice(0,1000));process.exit(1)" "$HTTP_STATUS" "$FILE_PATH"
+            fi
+          done
       - name: Verify and publish
         env:
           RANDSEED_API_URL: https://devcreator.randseed.org
           DEPLOYMENT_ID: ${{ inputs.deployment_id }}
         run: |
-          curl -fsS -X POST "$RANDSEED_API_URL/api/deployments/$DEPLOYMENT_ID/upload-complete" -H "Authorization: Bearer $OIDC_TOKEN" -H 'Content-Type: application/json' --data "$(node -e "const fs=require('fs');console.log(JSON.stringify({manifest:JSON.parse(fs.readFileSync('/tmp/randseed-manifest.json'))}))")"
+          set -Eeuo pipefail
+          HTTP_STATUS=$(curl -sS -o /tmp/randseed-complete-response -w '%{http_code}' -X POST "$RANDSEED_API_URL/api/deployments/$DEPLOYMENT_ID/upload-complete" -H "Authorization: Bearer $OIDC_TOKEN" -H 'Content-Type: application/json' --data "$(node -e "const fs=require('fs');console.log(JSON.stringify({manifest:JSON.parse(fs.readFileSync('/tmp/randseed-manifest.json'))}))")")
+          if [[ "$HTTP_STATUS" -lt 200 || "$HTTP_STATUS" -ge 300 ]]; then
+            node -e "const fs=require('fs');const body=fs.readFileSync('/tmp/randseed-complete-response','utf8');let message=body;try { const parsed=JSON.parse(body); message=parsed.code+': '+(parsed.error||parsed.message||body); } catch {} console.error('RandSeed deployment completion failed ('+process.argv[1]+'): '+message.replace(/\\s+/g,' ').slice(0,1000));process.exit(1)" "$HTTP_STATUS"
+          fi
