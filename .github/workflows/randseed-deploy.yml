@@ -1,4 +1,4 @@
-# randseed-workflow-version: 2
+# randseed-workflow-version: 3
 name: Deploy to RandSeed Sandbox
 
 on:
@@ -48,6 +48,36 @@ jobs:
           else
             npm install
             npm run build
+          fi
+      - name: Report build failure
+        if: failure()
+        env:
+          RANDSEED_API_URL: https://devcreator.randseed.org
+          OIDC_AUDIENCE: randseed-gamecreator
+          DEPLOYMENT_ID: ${{ inputs.deployment_id }}
+        run: |
+          set -Eeuo pipefail
+          OIDC_TOKEN=$(node --input-type=module <<'NODE'
+          const requestUrl = process.env.ACTIONS_ID_TOKEN_REQUEST_URL;
+          const requestToken = process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN;
+          const audience = process.env.OIDC_AUDIENCE;
+          if (!requestUrl || !requestToken || !audience) { console.error('GitHub Actions OIDC environment variables are missing'); process.exit(1); }
+          const url = new URL(requestUrl);
+          url.searchParams.set('audience', audience);
+          const response = await fetch(url, { headers: { Accept: 'application/json', Authorization: `bearer ${requestToken}` } });
+          const body = await response.text();
+          if (!response.ok) { console.error(`RandSeed build failure callback token request failed (${response.status})`); process.exit(1); }
+          let payload;
+          try { payload = JSON.parse(body); } catch { console.error('GitHub OIDC token endpoint returned invalid JSON'); process.exit(1); }
+          if (typeof payload.value !== 'string' || payload.value.length === 0) { console.error('GitHub OIDC token endpoint returned no token'); process.exit(1); }
+          process.stdout.write(payload.value);
+          NODE
+          )
+          echo "::add-mask::$OIDC_TOKEN"
+          HTTP_STATUS=$(curl -sS -o /tmp/randseed-build-failure-response -w '%{http_code}' -X POST "$RANDSEED_API_URL/api/deployments/$DEPLOYMENT_ID/build-failed" -H "Authorization: Bearer $OIDC_TOKEN" -H 'Content-Type: application/json' --data '{"error_code":"BUILD_FAILED"}')
+          if [[ "$HTTP_STATUS" -lt 200 || "$HTTP_STATUS" -ge 300 ]]; then
+            echo "RandSeed build failure callback failed ($HTTP_STATUS)" >&2
+            exit 1
           fi
       - name: Create manifest
         env:
@@ -151,4 +181,36 @@ jobs:
           HTTP_STATUS=$(curl -sS -o /tmp/randseed-complete-response -w '%{http_code}' -X POST "$RANDSEED_API_URL/api/deployments/$DEPLOYMENT_ID/upload-complete" -H "Authorization: Bearer $OIDC_TOKEN" -H 'Content-Type: application/json' --data "$(node -e "const fs=require('fs');console.log(JSON.stringify({manifest:JSON.parse(fs.readFileSync('/tmp/randseed-manifest.json'))}))")")
           if [[ "$HTTP_STATUS" -lt 200 || "$HTTP_STATUS" -ge 300 ]]; then
             node -e "const fs=require('fs');const body=fs.readFileSync('/tmp/randseed-complete-response','utf8');let message=body;try { const parsed=JSON.parse(body); message=parsed.code+': '+(parsed.error||parsed.message||body); } catch {} console.error('RandSeed deployment completion failed ('+process.argv[1]+'): '+message.replace(/\\s+/g,' ').slice(0,1000));process.exit(1)" "$HTTP_STATUS"
+          fi
+      - name: Report deployment failure
+        if: failure()
+        env:
+          RANDSEED_API_URL: https://devcreator.randseed.org
+          OIDC_AUDIENCE: randseed-gamecreator
+          DEPLOYMENT_ID: ${{ inputs.deployment_id }}
+        run: |
+          set -Eeuo pipefail
+          if [[ -z "${OIDC_TOKEN:-}" ]]; then
+            OIDC_TOKEN=$(node --input-type=module <<'NODE'
+            const requestUrl = process.env.ACTIONS_ID_TOKEN_REQUEST_URL;
+            const requestToken = process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN;
+            const audience = process.env.OIDC_AUDIENCE;
+            if (!requestUrl || !requestToken || !audience) { console.error('GitHub Actions OIDC environment variables are missing'); process.exit(1); }
+            const url = new URL(requestUrl);
+            url.searchParams.set('audience', audience);
+            const response = await fetch(url, { headers: { Accept: 'application/json', Authorization: `bearer ${requestToken}` } });
+            const body = await response.text();
+            if (!response.ok) { console.error(`RandSeed failure callback token request failed (${response.status})`); process.exit(1); }
+            let payload;
+            try { payload = JSON.parse(body); } catch { console.error('GitHub OIDC token endpoint returned invalid JSON'); process.exit(1); }
+            if (typeof payload.value !== 'string' || payload.value.length === 0) { console.error('GitHub OIDC token endpoint returned no token'); process.exit(1); }
+            process.stdout.write(payload.value);
+            NODE
+            )
+          fi
+          echo "::add-mask::$OIDC_TOKEN"
+          HTTP_STATUS=$(curl -sS -o /tmp/randseed-deployment-failure-response -w '%{http_code}' -X POST "$RANDSEED_API_URL/api/deployments/$DEPLOYMENT_ID/build-failed" -H "Authorization: Bearer $OIDC_TOKEN" -H 'Content-Type: application/json' --data '{"error_code":"DEPLOYMENT_FAILED"}')
+          if [[ "$HTTP_STATUS" -lt 200 || "$HTTP_STATUS" -ge 300 ]]; then
+            echo "RandSeed deployment failure callback failed ($HTTP_STATUS)" >&2
+            exit 1
           fi
