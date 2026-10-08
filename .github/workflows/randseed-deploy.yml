@@ -1,4 +1,4 @@
-# randseed-workflow-version: 4
+# randseed-workflow-version: 5
 name: Deploy to RandSeed Sandbox
 
 on:
@@ -256,12 +256,12 @@ jobs:
           node <<'NODE'
           const fs = require('fs');
           const session = JSON.parse(fs.readFileSync('/tmp/randseed-session.json', 'utf8'));
-          if (typeof session.upload_token !== 'string' || typeof session.upload_base_url !== 'string') {
-            console.error('RandSeed upload session response is missing upload credentials');
+          if (typeof session.upload_token !== 'string' || typeof session.upload_base_url !== 'string' || !Array.isArray(session.files_to_upload) || session.files_to_upload.some((path) => typeof path !== 'string')) {
+            console.error('RandSeed upload session response is missing upload credentials or its content-addressed file list');
             process.exit(1);
           }
           NODE
-      - name: Upload static files
+      - name: Upload missing content-addressed files
         env:
           RANDSEED_API_URL: https://devcreator.randseed.org
           DEPLOYMENT_ID: ${{ inputs.deployment_id }}
@@ -271,7 +271,9 @@ jobs:
           UPLOAD_TOKEN=$(node -e "console.log(require('/tmp/randseed-session.json').upload_token)")
           UPLOAD_BASE_URL=$(node -e "const { upload_base_url }=require('/tmp/randseed-session.json');console.log(new URL(upload_base_url,process.env.RANDSEED_API_URL).toString().replace(/\\/$/,''))")
           echo "::add-mask::$UPLOAD_TOKEN"
-          node -e "const m=require('/tmp/randseed-manifest.json');for(const f of m.files)console.log(f.path+'\t'+f.size)" | while IFS=$'\t' read -r FILE_PATH FILE_SIZE; do
+          node -e "const fs=require('fs');const m=JSON.parse(fs.readFileSync('/tmp/randseed-manifest.json','utf8'));const s=JSON.parse(fs.readFileSync('/tmp/randseed-session.json','utf8'));const byPath=new Map(m.files.map((f)=>[f.path,f]));for(const filePath of s.files_to_upload){const f=byPath.get(filePath);if(!f){console.error('RandSeed requested an undeclared file: '+filePath);process.exit(1)}console.log(Buffer.from(JSON.stringify([f.path,f.size])).toString('base64'))}" | while IFS= read -r FILE_ROW; do
+            FILE_PATH=$(node -e "console.log(JSON.parse(Buffer.from(process.argv[1],'base64').toString('utf8'))[0])" "$FILE_ROW")
+            FILE_SIZE=$(node -e "console.log(JSON.parse(Buffer.from(process.argv[1],'base64').toString('utf8'))[1])" "$FILE_ROW")
             ENCODED_PATH=$(node -e "console.log(process.argv[1].split('/').map(encodeURIComponent).join('/'))" "$FILE_PATH")
             HTTP_STATUS=$(curl -sS -o /tmp/randseed-upload-response -w '%{http_code}' -X PUT "$UPLOAD_BASE_URL/$ENCODED_PATH" -H "Authorization: Bearer $UPLOAD_TOKEN" -H "Content-Length: $FILE_SIZE" --data-binary @"$BUILD_DIR/$FILE_PATH")
             if [[ "$HTTP_STATUS" -lt 200 || "$HTTP_STATUS" -ge 300 ]]; then
