@@ -1,4 +1,4 @@
-# randseed-workflow-version: 5
+# randseed-workflow-version: 6
 name: Deploy to RandSeed Sandbox
 
 on:
@@ -13,6 +13,14 @@ on:
       game_id:
         required: true
         type: string
+      deployment_environment:
+        description: RandSeed deployment environment
+        required: true
+        type: choice
+        options:
+          - dev
+          - test
+          - production
 
 permissions:
   contents: read
@@ -25,6 +33,33 @@ jobs:
       id-token: write
     runs-on: ubuntu-latest
     steps:
+      - name: Resolve RandSeed deployment environment
+        id: target_environment
+        shell: bash
+        env:
+          TARGET_ENVIRONMENT: ${{ inputs.deployment_environment }}
+        run: |
+          set -Eeuo pipefail
+          case "$TARGET_ENVIRONMENT" in
+            dev)
+              API_URL="https://devcreator.randseed.org"
+              OIDC_AUDIENCE="randseed-gamecreator"
+              ;;
+            test)
+              API_URL="https://testcreator.randseed.org"
+              OIDC_AUDIENCE="randseed-gamecreator-test"
+              ;;
+            production)
+              API_URL="https://creator.randseed.org"
+              OIDC_AUDIENCE="randseed-gamecreator-production"
+              ;;
+            *)
+              echo "::error::Unsupported RandSeed deployment environment"
+              exit 1
+              ;;
+          esac
+          printf 'api_url=%s\n' "$API_URL" >> "$GITHUB_OUTPUT"
+          printf 'oidc_audience=%s\n' "$OIDC_AUDIENCE" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.commit_sha }}
@@ -110,8 +145,8 @@ jobs:
       - name: Report build failure
         if: failure()
         env:
-          RANDSEED_API_URL: https://devcreator.randseed.org
-          OIDC_AUDIENCE: randseed-gamecreator
+          RANDSEED_API_URL: ${{ steps.target_environment.outputs.api_url }}
+          OIDC_AUDIENCE: ${{ steps.target_environment.outputs.oidc_audience }}
           DEPLOYMENT_ID: ${{ inputs.deployment_id }}
         run: |
           set -Eeuo pipefail
@@ -205,8 +240,8 @@ jobs:
           NODE
       - name: Request upload session
         env:
-          RANDSEED_API_URL: https://devcreator.randseed.org
-          OIDC_AUDIENCE: randseed-gamecreator
+          RANDSEED_API_URL: ${{ steps.target_environment.outputs.api_url }}
+          OIDC_AUDIENCE: ${{ steps.target_environment.outputs.oidc_audience }}
           DEPLOYMENT_ID: ${{ inputs.deployment_id }}
         run: |
           set -Eeuo pipefail
@@ -263,7 +298,7 @@ jobs:
           NODE
       - name: Upload missing content-addressed files
         env:
-          RANDSEED_API_URL: https://devcreator.randseed.org
+          RANDSEED_API_URL: ${{ steps.target_environment.outputs.api_url }}
           DEPLOYMENT_ID: ${{ inputs.deployment_id }}
           BUILD_DIR: dist
         run: |
@@ -282,7 +317,7 @@ jobs:
           done
       - name: Verify and publish
         env:
-          RANDSEED_API_URL: https://devcreator.randseed.org
+          RANDSEED_API_URL: ${{ steps.target_environment.outputs.api_url }}
           DEPLOYMENT_ID: ${{ inputs.deployment_id }}
         run: |
           set -Eeuo pipefail
@@ -293,8 +328,8 @@ jobs:
       - name: Report deployment failure
         if: failure()
         env:
-          RANDSEED_API_URL: https://devcreator.randseed.org
-          OIDC_AUDIENCE: randseed-gamecreator
+          RANDSEED_API_URL: ${{ steps.target_environment.outputs.api_url }}
+          OIDC_AUDIENCE: ${{ steps.target_environment.outputs.oidc_audience }}
           DEPLOYMENT_ID: ${{ inputs.deployment_id }}
         run: |
           set -Eeuo pipefail
