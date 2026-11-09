@@ -4,7 +4,6 @@
  */
 
 import { GameProvider } from './context/GameContext';
-import { NavBar } from './components/NavBar';
 import { GameHeader } from './components/GameHeader';
 import { KenoGrid } from './components/KenoGrid';
 import { Paytable } from './components/Paytable';
@@ -26,7 +25,6 @@ function GameLayout() {
 
     return (
         <div className="flex flex-col items-center min-h-screen w-full">
-            <NavBar />
             <GameHeader />
             <div className="flex flex-col w-full max-w-[1024px] px-[10px]">
                 <KenoGrid />
